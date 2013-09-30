@@ -8,25 +8,25 @@
 #          --enablerepo=epel
 
 # We do NOT have a way of automatically linking these lists to AD
-#     (waiting on SSL certificate from I*)
+#     waiting on SSL certificate from I*
+#     and the AD gods have to delete/recreate groups that have been linked to 
+#     AD using this method anyhow
 # We do NOT have a way of automatically assigning of unique GIDs to anything
-#     horrible temporary method:
-#     request GID, hope it's unique
-#     try again if the AD overlords tell us it isn't
 #
 # TODO:
 # perpetual cleanup
 # --quiet, --verbose
 
-
-# v0.4 20-Jun-2013 - Added toggling of 'manager' and 'deliver to user' flags.
-# v0.3 12-Jun-2013 - Feature request: query list owner/managers
+# v0.41 30-Sep-2013 - Add username-only result mode, reads amtools.conf
+# v0.4  20-Jun-2013 - Added toggling of 'manager' and 'deliver to user' flags.
+# v0.3  12-Jun-2013 - Feature request: query list owner/managers
 
 
 # so we can include newlines in the argparse description
 from argparse import RawTextHelpFormatter 
-
 import getpass, sys, pprint, requests, json, argparse, re
+import ConfigParser
+
 #import inspect, IPython # just for debugging
 
 
@@ -36,6 +36,17 @@ ML_BASE_URL = 'https://rest.maillist.sfu.ca'
 ML_OPS_URL = ML_BASE_URL + '/maillists.' + ENC
 AUTH_BASE_URL = ML_BASE_URL + '/authenticationtoken/'
 POST_HEADERS = {'Content-type': 'application/json', 'Accept': 'text/plain'}
+
+config = ConfigParser.RawConfigParser()
+config.read('/exports/nfs4tools/amtools.conf')
+
+ADUSER = config.get('default','default_ldap_user')
+ADPASS = config.get('default','default_ldap_password')
+
+# sample amtools.conf:
+# default_ldap_user     = foo
+# default_ldap_password = bar
+# .. in the event you have a legitimate reason for storing credentials on disk
 
 # def macsbug():
 # 	'''Drop into interactive Python environment.
@@ -201,6 +212,22 @@ def DumpMaillistMembers(auth_token, maillist_name, maillist_idnum):
 
 	for member in listmembers:
 		print(member['address'])
+	return
+
+
+
+def DumpMaillistUsernames(auth_token, maillist_name, maillist_idnum):
+	'''Return a list of mailing list members in this format:
+		joe
+		sqpublic
+		...
+
+	https://rest.maillist.sfu.ca/maillists/ml_id_###/members.json?sfu_token=...
+	'''
+	listmembers = DumpRelationships(auth_token, maillist_idnum)
+
+	for member in listmembers:
+		print(member['username'])
 	return
 
 
@@ -459,11 +486,13 @@ def main(argv):
 		version='SMAC 0.4, 20-Jun-2013')
 
 	parser.add_argument('-u', '--mluser', dest='mluser', 
-		action='store',	metavar='username', required=True,
+		action='store',	metavar='username', required=False,
+		default=ADUSER,
 		help='SFU Maillist Manager username')
 
 	parser.add_argument('-p', '--mlpass', dest='mlpass', 
 		action='store',	metavar='password',	required=False,
+		default=ADPASS,
 		help='SFU Maillist Manager password')
 
 	parser.add_argument('-n', '--listname', dest='listname', 
@@ -485,6 +514,13 @@ def main(argv):
 	parser.add_argument('-T', '--status', dest='get_status', 
 		action='store_true', 
 		help='Report whether a maillist is active or inactive')
+
+	parser.add_argument('-U', '--shortusernames', dest='short_usernames', 
+		action='store_true', 
+		default=False,
+		help='Return short usernames, one per line, instead of the default RFC 5321 To: format')
+
+
 
 
 	parser.add_argument('-P', '--params', dest='get_params', 
@@ -611,7 +647,15 @@ def main(argv):
 			DestroyMaillist(auth_token, maillist, maillist_idnum)
 
 		if cmd['query_mode'] == True:
-			DumpMaillistMembers(auth_token, maillist, maillist_idnum)
+			if cmd['short_usernames'] == True:
+				DumpMaillistUsernames(auth_token, maillist, maillist_idnum)
+			else:
+				DumpMaillistMembers(auth_token, maillist, maillist_idnum)
+
+		if cmd['short_usernames'] == True:
+			DumpMaillistUsernames(auth_token, maillist, maillist_idnum)
+		
+
 
 		try:
 			if len(cmd['unixids_to_add']) > 0:
