@@ -27,7 +27,7 @@ from argparse import RawTextHelpFormatter
 import getpass, sys, pprint, requests, json, argparse, re
 import ConfigParser
 
-#import inspect, IPython # just for debugging
+from IPython import embed # just for debugging
 
 
 ENC = 'json' # preferred encoding
@@ -47,15 +47,6 @@ ADPASS = config.get('default','default_ldap_password')
 # default_ldap_user     = foo
 # default_ldap_password = bar
 # .. in the event you have a legitimate reason for storing credentials on disk
-
-# def macsbug():
-# 	'''Drop into interactive Python environment.
-# 	   c/o http://stackoverflow.com/a/962124 '''
-# 	__up_frame = inspect.currentframe().f_back
-# 	eval('IPython.Shell.IPShellEmbed([])()', # Empty list arg is           
-# 		 dict(globals().items() + __up_frame.f_globals.items()),
-# 		 __up_frame.f_locals)
-# 	return
 
 
 
@@ -211,12 +202,15 @@ def DumpMaillistMembers(auth_token, maillist_name, maillist_idnum):
 	listmembers = DumpRelationships(auth_token, maillist_idnum)
 
 	for member in listmembers:
-		print(member['address'])
+		try:
+			print(member['address'])
+		except KeyError: # maillists contained in maillists don't have usernames
+			print(member['canonicalAddress']) # but they do have an address		
 	return
 
 
 
-def DumpMaillistUsernames(auth_token, maillist_name, maillist_idnum):
+def DumpMaillistUsernames(auth_token, maillist_name, maillist_idnum, cmd):
 	'''Return a list of mailing list members in this format:
 		joe
 		sqpublic
@@ -226,8 +220,15 @@ def DumpMaillistUsernames(auth_token, maillist_name, maillist_idnum):
 	'''
 	listmembers = DumpRelationships(auth_token, maillist_idnum)
 
+
 	for member in listmembers:
-		print(member['username'])
+		try:
+			print(member['username'])
+		except KeyError: # maillists contained in maillists don't have usernames
+			if cmd['exclude_nested_list_names'] != True:
+				print(member['canonicalAddress']) # but they do have an address
+					# which we might not want to print if the user requested
+					# just usernames, not usernames+maillist names
 	return
 
 
@@ -511,6 +512,10 @@ def main(argv):
 		action='store_true', 
 		help='List the Owners and Managers of this list ([E]xecutives? No? Okay, I\'ll leave)')
 
+	parser.add_argument('-e', '--exclude-nested', dest='exclude_nested_list_names', 
+		action='store_true', default=True,
+		help='When generating a member list, exclude the names of other mailing lists (i.e., usernames only)')
+
 	parser.add_argument('-T', '--status', dest='get_status', 
 		action='store_true', 
 		help='Report whether a maillist is active or inactive')
@@ -648,12 +653,12 @@ def main(argv):
 
 		if cmd['query_mode'] == True:
 			if cmd['short_usernames'] == True:
-				DumpMaillistUsernames(auth_token, maillist, maillist_idnum)
+				DumpMaillistUsernames(auth_token, maillist, maillist_idnum, cmd)
 			else:
 				DumpMaillistMembers(auth_token, maillist, maillist_idnum)
 
 		if cmd['short_usernames'] == True:
-			DumpMaillistUsernames(auth_token, maillist, maillist_idnum)
+			DumpMaillistUsernames(auth_token, maillist, maillist_idnum, cmd)
 		
 
 
