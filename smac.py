@@ -185,6 +185,7 @@ def DumpRelationships(auth_token, maillist_idnum):
 
 	if r.status_code != 200:
 		sys.stderr.write(' FATAL: ' + str(r.status_code) + ': ' + r.text + "\n")
+		exit(1)
 	return(json.loads(r.text))
 
 
@@ -283,6 +284,7 @@ def DelMembersFromList(auth_token, maillist_name, maillist_idnum, unixids):
 			sys.stderr.write(" was not subscribed\n")
 		else:
 			sys.stderr.write(' FATAL: ' + str(r.status_code) + ': ' + r.text + "\n")
+			exit(1)
 	return
 
 	
@@ -328,6 +330,7 @@ def AddMembersToList(auth_token, maillist_name, maillist_idnum,
 			sys.stderr.write(" already a member")
 		else:
 			sys.stderr.write(' FATAL: ' + str(r.status_code) + ': ' + r.text + "")
+			exit(1)
 
 		# full user record looks like this:
 		# {u'address': u'Joseph Sixpack <jsixpack@sfu.ca>',
@@ -434,6 +437,7 @@ def DumpMaillistExecutives(auth_token, maillist, maillist_idnum):
 
 	if r.status_code != 200:
 		sys.stderr.write('\nFATAL: ' + str(r.status_code) + ': ' + r.text + "\n")
+		exit(1)
 	ml_params = (json.loads(r.text))
         sys.stdout.write(ml_params['owner'] + '\n')
 
@@ -442,6 +446,7 @@ def DumpMaillistExecutives(auth_token, maillist, maillist_idnum):
 	r = requests.get(ml_managers_url, params=params_qs, verify=ML_REAL_SSL_CERT)
 	if r.status_code != 200:
 		sys.stderr.write(str(r.status_code) + ': ' + r.text + "\n")
+		exit(1)
 	else:
 		managers_list = []
 		managers_raw = json.loads(r.text)
@@ -525,9 +530,6 @@ def main(argv):
 		default=False,
 		help='Return short usernames, one per line, instead of the default RFC 5321 To: format')
 
-
-
-
 	parser.add_argument('-P', '--params', dest='get_params', 
 		action='store_true', 
 		help='Dump maillist parameters')
@@ -591,6 +593,7 @@ def main(argv):
 	auth_token = GetAuthToken(auth_url)
 
 
+
 	# iterate over the mailing lists provided
 	maillists_to_process = []
 
@@ -602,7 +605,7 @@ def main(argv):
 		maillists_to_process.append(unixids)
 	else:
 		maillists_to_process = cmd['listname']
-	
+
 	# take -M(anager status) and -D(eliver status)
         # and convert 1/on/yes/true to True
         # and 0/off/no/false to False
